@@ -55,6 +55,13 @@ The shared data structure should remain consistent across all modules. Scenario 
 - Interactive Streamlit dashboard
 - Final report and project presentation
 
+  ## Expected Final System Interface
+
+The following image is a conceptual preview of our proposed
+Event Traffic Management IDSS dashboard.
+
+![IDSS Dashboard Preview]([Event Traffic Management Dashboard.png](url))
+
 ## Project Status
 
 **In Development**
