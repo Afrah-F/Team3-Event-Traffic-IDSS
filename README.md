@@ -60,7 +60,7 @@ The shared data structure should remain consistent across all modules. Scenario 
 The following image is a conceptual preview of our proposed
 Event Traffic Management IDSS dashboard.
 
-![IDSS Dashboard Preview]([Event Traffic Management Dashboard.png](url))
+![IDSS Dashboard Preview](Event%20Traffic%20Management%20Dashboard.png)
 
 ## Project Status
 
