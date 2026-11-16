@@ -1,0 +1,28 @@
+{
+  "contract_version": "1.0",
+  "assumption_status": "DRAFT - TEAM APPROVAL REQUIRED; NOT MEASURED TRAFFIC DATA",
+  "network_version": "draft-network-v0",
+  "route_ids": ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"],
+  "capacity_definition": "Maximum allocated vehicles per route during departure_window_s; preliminary modeling assumption, not verified physical throughput",
+  "departure_window_s": 1800,
+  "seed": 42,
+  "route_capacity": {
+    "R1": 300, "R2": 250, "R3": 250, "R4": 250,
+    "R5": 250, "R6": 250, "R7": 250, "R8": 250
+  },
+  "scenarios": {
+    "low": {"vehicle_count": 400},
+    "medium": {"vehicle_count": 800},
+    "high": {"vehicle_count": 1200}
+  },
+  "baseline_route_weights": {
+    "R1": 0.30, "R2": 0.15, "R3": 0.12, "R4": 0.11,
+    "R5": 0.10, "R6": 0.09, "R7": 0.07, "R8": 0.06
+  },
+  "metrics": {
+    "average_delay_s": "Mean vehicle timeLoss (definition to verify against SUMO output)",
+    "clearance_time_s": "Elapsed seconds from event release to final modeled vehicle exit",
+    "average_travel_time_s": "Mean completed trip duration in seconds",
+    "mean_queue_vehicles": "Mean queued vehicles over documented network edges and sample times"
+  }
+}
