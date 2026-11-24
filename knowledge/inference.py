@@ -1,96 +1,45 @@
 
-"""Reasoning engine for the Event Traffic IDSS."""
-
+"""Forward-chaining inference engine: match -> fire -> add fact -> repeat."""
 from shared.schema import SimulationConfig, SimulationResult
-from knowledge.rules import check_rules
+from knowledge.rules import RULES, collect_facts
 
 
-def evaluate_facts(
-    config: SimulationConfig,
-    allocation_counts: dict,
-    result: SimulationResult | None = None
-) -> dict:
-    """
-    Apply traffic rules and assess simulation reliability.
+def evaluate_facts(config: SimulationConfig, allocation_counts: dict,
+                   result: SimulationResult | None = None) -> dict:
+    # Working memory initially contains observed facts, not conclusions.
+    memory = collect_facts(config, allocation_counts, result)
+    fired = []
+    trace = []
 
-    Decisions:
-    - accept: valid allocation with a reliable result
-    - review: more evidence or human review is needed
-    - reject: invalid or infeasible allocation
-    """
+    # Iterate until no new rule can fire (forward chaining).
+    while True:
+        matches = [rule for rule in RULES
+                   if rule.rule_id not in fired
+                   and all(fact in memory for fact in rule.conditions)]
+        if not matches:
+            break
+        # Meta-rule style conflict resolution: highest priority first.
+        rule = sorted(matches, key=lambda r: (-r.priority, r.rule_id))[0]
+        fired.append(rule.rule_id)
+        memory.add(rule.conclusion)
+        trace.append({"rule_id": rule.rule_id,
+                      "if_facts": list(rule.conditions),
+                      "then_fact": rule.conclusion,
+                      "explanation": rule.explanation})
 
-    # Step 1: Apply the allocation rules.
-    rule_output = check_rules(config, allocation_counts)
-
-    fired_rules = list(rule_output["fired_rule_ids"])
-    warnings = list(rule_output["warnings"])
-
-    # Step 2: Reject invalid allocations.
-    if rule_output["decision"] == "reject":
-        return {
-            "decision": "reject",
-            "fired_rule_ids": fired_rules,
-            "warnings": warnings
-        }
-
-    # Step 3: A simulation result is required
-    # before accepting a recommendation.
-    if result is None:
-        fired_rules.append("R07")
-        warnings.append(
-            "No simulation result is available yet."
-        )
+    # Conflict resolution: REJECT > REVIEW > ACCEPT.
+    if "decision_reject" in memory:
+        decision = "reject"
+    elif "decision_review" in memory:
+        decision = "review"
+    elif "decision_accept" in memory:
+        decision = "accept"
+    else:
         decision = "review"
 
-    else:
-        decision = "accept"
-
-        # Step 4: Check simulation status.
-        if result.status != "success":
-            fired_rules.append("R08")
-            warnings.append(
-                f"Simulation status: {result.status}."
-            )
-            decision = "review"
-
-        # Step 5: Check whether all vehicles finished.
-        if result.completed_vehicles < config.vehicle_count:
-            fired_rules.append("R09")
-            warnings.append(
-                "Not all expected vehicles completed their trips."
-            )
-            decision = "review"
-
-        # Step 6: Check essential performance metrics.
-        if (
-            result.average_delay_s is None
-            or result.clearance_time_s is None
-        ):
-            fired_rules.append("R10")
-            warnings.append(
-                "Important simulation metrics are missing."
-            )
-            decision = "review"
-
-        # Step 7: Check result consistency.
-        if result.allocation_counts != allocation_counts:
-            fired_rules.append("R11")
-            warnings.append(
-                "Simulation allocation does not match "
-                "the proposed allocation."
-            )
-            decision = "review"
-
-        if result.departed_vehicles < result.completed_vehicles:
-            fired_rules.append("R12")
-            warnings.append(
-                "Completed vehicles exceed departed vehicles."
-            )
-            decision = "review"
-
-    # Step 8: Return a structured result.
-    return {
-        "decision": decision,
-        "fired_rule_ids": fired_rules,
-        "warnings": warnings
-    }
+    return {"decision": decision,
+            "fired_rule_ids": fired,
+            "warnings": [step["explanation"] for step in trace
+                         if step["rule_id"].startswith("R")],
+            "inference_trace": trace,
+            "working_memory": sorted(memory)}
