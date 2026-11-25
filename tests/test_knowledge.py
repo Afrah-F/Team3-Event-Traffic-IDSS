@@ -125,5 +125,103 @@ class TestRisk(unittest.TestCase):
             analyze_risk(make_config(), make_allocation(), reduced_route="R9")
 
 
+class TestIndividualProductionRules(unittest.TestCase):
+    """One focused check for each previously uncovered production rule."""
+
+    def check_rule(self, rule_id, allocation=None, result=None, config=None,
+                   expected_decision=None):
+        config = make_config() if config is None else config
+        allocation = make_allocation() if allocation is None else allocation
+        output = evaluate_facts(config, allocation, result)
+        self.assertIn(rule_id, output["fired_rule_ids"])
+        self.assertTrue(any(step["rule_id"] == rule_id
+                            for step in output["inference_trace"]))
+        if expected_decision is not None:
+            self.assertEqual(output["decision"], expected_decision)
+        return output
+
+    def test_R01_missing_route(self):
+        allocation = make_allocation()
+        del allocation["R8"]
+        self.check_rule("R01", allocation=allocation, expected_decision="reject")
+
+    def test_R01_negative_count(self):
+        allocation = make_allocation()
+        allocation["R1"] = -1
+        self.check_rule("R01", allocation=allocation, expected_decision="reject")
+
+    def test_R02_wrong_allocation_total(self):
+        allocation = make_allocation()
+        allocation["R1"] = 99
+        self.check_rule("R02", allocation=allocation, expected_decision="reject")
+
+    def test_R03_insufficient_total_capacity(self):
+        config = SimulationConfig(
+            scenario_id="medium", vehicle_count=800,
+            route_capacity={route: 90 for route in ROUTE_IDS},
+            departure_window_s=1800, seed=42,
+            network_version="draft-network-v0")
+        self.check_rule("R03", config=config, expected_decision="reject")
+
+    def test_R04_route_capacity_exceeded(self):
+        allocation = make_allocation()
+        allocation["R1"] = 350
+        allocation["R2"] = 50
+        self.check_rule("R04", allocation=allocation, expected_decision="reject")
+
+    def test_R05_missing_simulation(self):
+        self.check_rule("R05", expected_decision="review")
+
+    def test_R06_failed_simulation(self):
+        self.check_rule("R06", result=make_result(status="simulation_failed"),
+                        expected_decision="review")
+
+    def test_R07_incomplete_trips(self):
+        self.check_rule("R07", result=make_result(completed=700),
+                        expected_decision="review")
+
+    def test_R08_missing_metric(self):
+        self.check_rule("R08", result=make_result(delay=None),
+                        expected_decision="review")
+
+    def test_R08_invalid_metric(self):
+        self.check_rule("R08", result=make_result(clearance=-1),
+                        expected_decision="review")
+
+    def test_R09_mismatched_scenario(self):
+        self.check_rule("R09", result=make_result(scenario="high"),
+                        expected_decision="review")
+
+    def test_R09_mismatched_seed(self):
+        self.check_rule("R09", result=make_result(seed=7),
+                        expected_decision="review")
+
+    def test_R10_inconsistent_departed_count(self):
+        result = make_result()
+        result.departed_vehicles = 790
+        self.check_rule("R10", result=result, expected_decision="review")
+
+    def test_meta_rules_and_conflict_resolution(self):
+        # Both reject and review become derivable; reject has precedence.
+        allocation = make_allocation()
+        allocation["R1"] = 350
+        allocation["R2"] = 50
+        output = evaluate_facts(make_config(), allocation)
+        self.assertEqual(output["decision"], "reject")
+        self.assertTrue({"MR1", "MR2"}.issubset(output["fired_rule_ids"]))
+        trace_ids = [step["rule_id"] for step in output["inference_trace"]]
+        self.assertLess(trace_ids.index("MR1"), trace_ids.index("MR2"))
+        self.assertEqual(len(trace_ids), len(set(trace_ids)))
+
+    def test_MR3_only_with_valid_candidate_and_reliable_simulation(self):
+        accepted = evaluate_facts(make_config(), make_allocation(), make_result())
+        self.assertEqual(accepted["decision"], "accept")
+        self.assertIn("MR3", accepted["fired_rule_ids"])
+        self.assertTrue({"candidate_valid", "simulation_reliable"}.issubset(
+            accepted["working_memory"]))
+        unverified = evaluate_facts(make_config(), make_allocation())
+        self.assertNotIn("MR3", unverified["fired_rule_ids"])
+
+
 if __name__ == "__main__":
     unittest.main()
