@@ -13,7 +13,7 @@ def _good_metric(value):
 
 def explain_recommendation(baseline: SimulationResult,
                            optimized: SimulationResult,
-                           tolerance_s: float = 1.0) -> dict:
+                           tolerance_s: float = 0.01) -> dict:
     if not _good_metric(tolerance_s):
         raise ValueError("tolerance_s must be nonnegative and finite")
     warnings = []
